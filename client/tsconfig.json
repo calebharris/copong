@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "es5",
+    "noImplicitAny": false,
+    "target": "es5",
+    "baseUrl": ".",
+    "paths": {
+      "p2": ["node_modules/phaser-ce/build/custom/p2"],
+      "pixi": ["node_modules/phaser-ce/build/custom/pixi"]
+    }
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "dist/",
+    "node_modules/"
+  ]
+}

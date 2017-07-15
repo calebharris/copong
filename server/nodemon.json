@@ -1,0 +1,7 @@
+{
+  "env": {
+    "COPONG_PORT": 3000
+  },
+  "ext": "ts json",
+  "exec": "ts-node index.ts"
+}
