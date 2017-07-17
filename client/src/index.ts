@@ -1,7 +1,8 @@
 import * as Phaser from "phaser-ce";
-import * as faye from "faye";
+import * as Faye from "faye";
+import Rx from "rxjs/Rx";
 
-const client = new faye.Client("/topics");
+const client = new Faye.Client("/topics");
 
 const GAME_W = 640, GAME_H = 480;
 

@@ -1,12 +1,15 @@
 {
   "compilerOptions": {
-    "module": "es5",
+    "allowSyntheticDefaultImports": true,
+    "lib": ["es6", "dom"],
     "noImplicitAny": false,
     "target": "es5",
     "baseUrl": ".",
     "paths": {
+      "faye": ["node_modules/faye/client/faye-browser"],
       "p2": ["node_modules/phaser-ce/build/custom/p2"],
-      "pixi": ["node_modules/phaser-ce/build/custom/pixi"]
+      "pixi": ["node_modules/phaser-ce/build/custom/pixi"],
+      "phaser-ce": ["node_modules/phaser-ce/build/custom/phaser-split"]
     }
   },
   "include": [
