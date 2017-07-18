@@ -1,6 +1,7 @@
 import * as express from "express";
 import * as faye from "faye";
 import * as http from "http";
+import * as Rx from "rxjs";
 
 const app = express();
 app.set("views", "./views");
@@ -53,6 +54,7 @@ function handleKeyUp(evt) {
   }
 }
 
+
 bayeux.getClient().subscribe("/topics/game/controls", (evt) => {
   console.log("Got event: ");
   console.dir(evt);
@@ -68,22 +70,19 @@ bayeux.getClient().subscribe("/topics/game/controls", (evt) => {
   }
 });
 
-let sendingEvents = false;
-
 bayeux.on("subscribe", (clientId, channel) => {
   console.info(`client ${clientId} subscribed to ${channel}`); 
-  if (!sendingEvents) {
-    sendingEvents = true;
-    sendEventsForever();
-  }
 });
 
-function sendEventsForever() {
-  setInterval(() => {
-    state.paddle.pos.x += (state.paddle.v.x);
-    bayeux.getClient().publish("/topics/game/state", {name: "tick", state: state});
-  }, 1000 / 60);
-}
+Rx.Observable
+  .interval(1000 / 60)
+  .mapTo(state)
+  .map( _ => {
+    _.paddle.pos.x += _.paddle.v.x;
+    return _;
+  })
+  .map( _ => ({ name: "tick", state: _ }) )
+  .subscribe( _ => bayeux.getClient().publish("/topics/game/state", _) );
 
 const port = parseInt(process.env.COPONG_PORT || "3000");
 
