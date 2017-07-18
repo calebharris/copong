@@ -1,6 +1,6 @@
 import * as Phaser from "phaser-ce";
 import * as Faye from "faye";
-import Rx from "rxjs/Rx";
+const Rx = require("rxjs/Rx");
 
 const client = new Faye.Client("/topics");
 
@@ -19,56 +19,30 @@ function preload() {
 function create() {
   ballSprite = game.add.sprite(0, 0, 'ball');
   paddleSprite = game.add.sprite(0, GAME_H - 31, "paddle");
-  const cursorKeys = game.input.keyboard.createCursorKeys();
-  cursorKeys.right.onDown.add(() => {
-    console.log("right pressed");
-    client.publish("/topics/game/controls", { 
-      name: "keyDown",
-      payload: {
-        key: "cursorRight"
-      }
-    });
-  });
-  cursorKeys.right.onUp.add(() => {
-    console.log("right released");
-    client.publish("/topics/game/controls", {
-      name: "keyUp",
-      payload: {
-        key: "cursorRight"
-      }
-    });
-  });
-  cursorKeys.left.onDown.add(() => {
-    console.log("left pressed");
-    client.publish("/topics/game/controls", { 
-      name: "keyDown",
-      payload: {
-        key: "cursorLeft"
-      }
-    });
-  });
-  cursorKeys.left.onUp.add(() => {
-    console.log("left released");
-    client.publish("/topics/game/controls", {
-      name: "keyUp",
-      payload: {
-        key: "cursorLeft"
-      }
-    });
-  });
+
+  Rx.Observable
+    .fromEventPattern(
+      _ => game.input.keyboard.onDownCallback = _ )
+    .merge(Rx.Observable.fromEventPattern(
+      _ => game.input.keyboard.onUpCallback = _ ))
+    .filter(
+      _ => ["ArrowLeft", "ArrowRight", "Left", "Right"].some( s => s === _.key ) )
+    .distinctUntilChanged(
+      (l, r) => l.key === r.key && l.type === r.type )
+    .map(
+      _ => ({
+        name: _.type === "keyup" ? "keyUp" : "keyDown",
+        payload: {
+          key: _.key === "ArrowLeft" || _.key === "Left" ? "cursorLeft" : "cursorRight"
+        }
+      }))
+    .subscribe( _ => client.publish("/topics/game/controls", _) );
 }
 
 function update() {
 }
 
-const sub = client.subscribe("/topics/game/state", (evt) => {
-  //console.log(evt);
-  paddleSprite.position.x = evt.state.paddle.pos.x;
+const sub = client.subscribe("/topics/game/state", _ => {
+  paddleSprite.position.x = _.state.paddle.pos.x;
 });
-sub.then(() => {
-  console.log("Subscription confirmed");
-});
-
-
-
-
+sub.then( () => console.log("Subscription confirmed") );
