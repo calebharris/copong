@@ -18,68 +18,75 @@ const bayeux = new faye.NodeAdapter({mount: "/topics", timeout: 45});
 
 const state = {
   paddle: {
-    v: {
-      x: 0
-    },
-    pos: {
-      x: 0
-    }
+    v:   { x: 0 },
+    pos: { x: (640 - 144) / 2 }
   },
-  ts: process.hrtime()
+  ball: {
+    v:   { x: 2, y: 2 },
+    pos: { x: 0, y: (480 - 17) / 2 }
+  },
 };
 
-function handleKeyDown(evt) {
-  switch (evt.payload.key) {
-    case "cursorRight":
-      state.paddle.v.x += 1;
-      break;
-    case "cursorLeft":
-      state.paddle.v.x -= 1;
-      break;
-    default:
-      console.dir("Unknown keyDown event:", evt);
-  }
-}
+const [downObs, upObs] = Rx.Observable
+  .fromEventPattern( _ => bayeux.getClient().subscribe("/topics/game/controls", _) )
+  .partition( (_: any) => _.name === "keyDown" );
 
-function handleKeyUp(evt) {
-  switch (evt.payload.key) {
-    case "cursorRight":
-      state.paddle.v.x -= 1;
-      break;
-    case "cursorLeft":
-      state.paddle.v.x += 1;
-      break;
-    default:
-      console.dir("Unknown keyUp event:", evt);
-  }
-}
+const [leftObs, rightObs] = downObs
+  .map( _ => Object.assign({}, _, { vMult: 1 }) )
+  .merge(upObs.map( _ => Object.assign({}, _, { vMult: -1 }) ))
+  .partition( _ => _.payload.key === "cursorLeft" );
 
-
-bayeux.getClient().subscribe("/topics/game/controls", (evt) => {
-  console.log("Got event: ");
-  console.dir(evt);
-  switch (evt.name) {
-    case "keyDown":
-      handleKeyDown(evt);
-      break;
-    case "keyUp":
-      handleKeyUp(evt);
-      break;
-    default:
-      console.dir("Unknown event:", evt);
-  }
-});
-
+leftObs
+  .map( _ => Object.assign({}, _, { deltaVX: -1 }) )
+  .merge(rightObs.map( _ => Object.assign({}, _, { deltaVX: 1 }) ))
+  .subscribe( _ => {
+    console.log("Got event: ");
+    console.dir(_);
+    state.paddle.v.x += ( _.vMult * _.deltaVX )
+  });
+  
 bayeux.on("subscribe", (clientId, channel) => {
   console.info(`client ${clientId} subscribed to ${channel}`); 
 });
+
+function applyPaddleV(state) {
+  state.paddle.pos.x += state.paddle.v.x;
+  return state;
+}
+
+function applyBallV(state) {
+  const v = state.ball.v;
+  const pos = state.ball.pos;
+  pos.x += v.x;
+  pos.y += v.y;
+  if (v.x > 0 && pos.x >= 640 - 7) { v.x = -2 }
+  if (v.x < 0 && pos.x <= 0) { v.x = 2 }
+  if (v.y > 0 && pos.y >= 480 - 31 - 17) {
+    // Uh-oh, we're near the bottom of the screen... did we hit the paddle?
+    if (pos.x >= state.paddle.pos.x && pos.x + 17 <= state.paddle.pos.x + 144) {
+      v.y = -2;
+    }
+    // If not, reset the game
+    else {
+      state.paddle = {
+        v:   { x: 0 },
+        pos: { x: (640 - 144) / 2 }
+      };
+      state.ball = {
+        v:   { x: 2, y: 2 },
+        pos: { x: 0, y: (480 - 17) / 2 }
+      };
+    }
+  }
+  if (v.y < 0 && pos.y <= 0) { v.y = 2 }
+  return state;
+}
 
 Rx.Observable
   .interval(1000 / 60)
   .mapTo(state)
   .map( _ => {
-    _.paddle.pos.x += _.paddle.v.x;
-    return _;
+    return applyBallV(applyPaddleV(_));
   })
   .map( _ => ({ name: "tick", state: _ }) )
   .subscribe( _ => bayeux.getClient().publish("/topics/game/state", _) );

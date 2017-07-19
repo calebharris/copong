@@ -44,5 +44,7 @@ function update() {
 
 const sub = client.subscribe("/topics/game/state", _ => {
   paddleSprite.position.x = _.state.paddle.pos.x;
+  ballSprite.position.x = _.state.ball.pos.x;
+  ballSprite.position.y = _.state.ball.pos.y;
 });
 sub.then( () => console.log("Subscription confirmed") );
