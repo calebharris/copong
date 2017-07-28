@@ -1,30 +1,35 @@
-import * as Phaser from "phaser-ce";
 import * as Faye from "faye";
+import {autoDetectRenderer, loader, Container, Sprite} from "pixi.js";
 const Rx = require("rxjs/Rx");
 
 const client = new Faye.Client("/topics");
 
 const GAME_W = 640, GAME_H = 480;
+const BALL_FILE = "public/assets/aqua_ball.png";
+const PADDLE_FILE = "public/assets/phaser.png";
 
-let game = new Phaser.Game(GAME_W, GAME_H, Phaser.AUTO, null, {preload: preload, create: create, update: update});
+const renderer = autoDetectRenderer(GAME_W, GAME_H);
+document.body.appendChild(renderer.view);
+const stage = new Container();
 
-let ballSprite: Phaser.Sprite;
-let paddleSprite: Phaser.Sprite;
+loader.add([BALL_FILE, PADDLE_FILE]).load(create);
 
-function preload() {
-  game.load.spritesheet('ball', 'public/assets/aqua_ball.png', 17, 17);
-  game.load.spritesheet('paddle', 'public/assets/phaser.png', 144, 31);
-}
+let ballSprite: Sprite;
+let paddleSprite: Sprite;
 
 function create() {
-  ballSprite = game.add.sprite(0, 0, 'ball');
-  paddleSprite = game.add.sprite(0, GAME_H - 31, "paddle");
+  ballSprite = new Sprite(loader.resources[BALL_FILE].texture);
+  paddleSprite = new Sprite(loader.resources[PADDLE_FILE].texture);
+  paddleSprite.x = 0;
+  paddleSprite.y = GAME_H - 31;
+  stage.addChild(ballSprite);
+  stage.addChild(paddleSprite);
 
   Rx.Observable
     .fromEventPattern(
-      _ => game.input.keyboard.onDownCallback = _ )
+      _ => window.addEventListener("keydown", _))
     .merge(Rx.Observable.fromEventPattern(
-      _ => game.input.keyboard.onUpCallback = _ ))
+      _ => window.addEventListener("keyup", _)))
     .filter(
       _ => ["ArrowLeft", "ArrowRight", "Left", "Right"].some( s => s === _.key ) )
     .distinctUntilChanged(
@@ -37,15 +42,19 @@ function create() {
         }
       }))
     .subscribe( _ => client.publish("/topics/game/controls", _) );
+
+  Rx.Observable
+    .fromEventPattern( _ => client.subscribe("/topics/game/state", _))
+    .subscribe( _ => {
+      paddleSprite.x = _.state.paddle.pos.x;
+      ballSprite.x = _.state.ball.pos.x;
+      ballSprite.y = _.state.ball.pos.y;
+    });
 }
 
-function update() {
+function update(timestamp: number) {
+  renderer.render(stage);
+  window.requestAnimationFrame(update);
 }
 
-Rx.Observable
-  .fromEventPattern( _ => client.subscribe("/topics/game/state", _))
-  .subscribe( _ => {
-    paddleSprite.position.x = _.state.paddle.pos.x;
-    ballSprite.position.x = _.state.ball.pos.x;
-    ballSprite.position.y = _.state.ball.pos.y;
-  });
+window.requestAnimationFrame(update);
